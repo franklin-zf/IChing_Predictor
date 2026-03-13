@@ -1,0 +1,17 @@
+app:
+  symbol: "QQQ.US"
+  timezone: "America/New_York"
+  opening_range_start: "09:30:00"
+  opening_range_end: "09:45:00"
+  market_close_force_exit: "15:30:00"
+  prep_distance_pct: 0.0005
+  backtest_days: 30
+
+longport:
+  app_key: "YOUR_APP_KEY"
+  app_secret: "YOUR_APP_SECRET"
+  access_token: "YOUR_ACCESS_TOKEN"
+
+alert:
+  enable_voice: true
+  voice_rate: 180
