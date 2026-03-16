@@ -4,7 +4,7 @@ import yaml
 import pandas as pd
 from datetime import datetime, timedelta, date
 from longport.openapi import Config, QuoteContext, Period, AdjustType, TradeSessions
-from ultimate_predict import ultimate_iching_prediction, BAGUA_NAMES
+from quant_predict import quant_iching_prediction, BAGUA_NAMES
 
 def get_symbol_config(choice):
     if choice == '1':
@@ -14,18 +14,19 @@ def get_symbol_config(choice):
     return None, None, None
 
 def update_data(symbol, csv_path):
-    print(f"⏳ 正在连接 Longport 获取 {symbol} 昨夜最新行情数据...")
+    print(f"⏳ 正在更新 {symbol} 本地历史数据 (跳过长桥实时更新以防限流，使用 YFinance 兜底)...")
     try:
-        with open('config.yaml', 'r', encoding='utf-8') as f:
-            cfg = yaml.safe_load(f)
+        # with open('config.yaml', 'r', encoding='utf-8') as f:
+        #     cfg = yaml.safe_load(f)
+        pass
     except FileNotFoundError:
         print("❌ 找不到 config.yaml 文件，请确保配置文件存在。")
         return False
 
-    os.environ['LONGPORT_APP_KEY'] = cfg['longport']['app_key']
-    os.environ['LONGPORT_APP_SECRET'] = cfg['longport']['app_secret']
-    os.environ['LONGPORT_ACCESS_TOKEN'] = cfg['longport']['access_token']
-    ctx = QuoteContext(Config.from_env())
+    # os.environ['LONGPORT_APP_KEY'] = cfg['longport']['app_key']
+    # os.environ['LONGPORT_APP_SECRET'] = cfg['longport']['app_secret']
+    # os.environ['LONGPORT_ACCESS_TOKEN'] = cfg['longport']['access_token']
+    # ctx = QuoteContext(Config.from_env())
 
     if os.path.exists(csv_path):
         df = pd.read_csv(csv_path, parse_dates=['datetime'])
@@ -41,22 +42,24 @@ def update_data(symbol, csv_path):
     cur = last_date
     rows = []
     
-    while cur <= end_date:
-        w_end = min(cur + timedelta(days=2), end_date)
-        try:
-            bars = ctx.history_candlesticks_by_date(symbol, Period.Min_1, AdjustType.NoAdjust, cur, w_end, TradeSessions.All)
-            for b in bars:
-                rows.append({
-                    'datetime': str(b.timestamp),
-                    'open': float(b.open),
-                    'high': float(b.high),
-                    'low': float(b.low),
-                    'close': float(b.close),
-                    'volume': float(b.volume)
-                })
-        except Exception as e:
-            pass
-        cur = w_end + timedelta(days=1)
+    # 暂时禁用长桥同步，防止触发并发连接数限制
+    # while cur <= end_date:
+    #     w_end = min(cur + timedelta(days=2), end_date)
+    #     try:
+    #         bars = ctx.history_candlesticks_by_date(symbol, Period.Min_1, AdjustType.NoAdjust, cur, w_end, TradeSessions.All)
+    #         for b in bars:
+    #             rows.append({
+    #                 'datetime': str(b.timestamp),
+    #                 'open': float(b.open),
+    #                 'high': float(b.high),
+    #                 'low': float(b.low),
+    #                 'close': float(b.close),
+    #                 'volume': float(b.volume)
+    #             })
+    #     except Exception as e:
+    #         pass
+    #     cur = w_end + timedelta(days=1)
+
 
     if rows:
         new_df = pd.DataFrame(rows)
@@ -110,7 +113,7 @@ def generate_report(csv_path, symbol_type):
     print(f"\n🔮 正在推演今晚美股 ({target_date_str}) {symbol_type} 的终极时空点位... (外应事件: {event_name})")
     
     try:
-        res = ultimate_iching_prediction(csv_path, target_date_str, event_type, symbol_type=symbol_type)
+        res = quant_iching_prediction(csv_path, target_date_str, event_type, symbol_type=symbol_type)
     except Exception as e:
         print(f"❌ 预测算法执行出错: {e}")
         return
@@ -125,24 +128,33 @@ def generate_report(csv_path, symbol_type):
     
     pts = sorted(res['points'], key=lambda x: x[1], reverse=True)
     
-    md_content = f"""# 🔮 {symbol_type} 终极时空决断预测战报
+    md_content = f"""# 🔮 {symbol_type} 终极时空决断预测战报 (V2 量价增强版)
 **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} (亚洲时间)
 **目标交易日**: {target_date_str} (美东时间)
 **宏观外应**: {event_name}
 
 ---
 
-## ☯️ 易经时空卦象
+## 📈 1. 盘前量价定势 (Quant Bias)
+- **隔夜跳空幅度 (Gap)**: `{res['gap_pct']:.2f}%`
+- **夜盘量能比 (Vol Ratio)**: `{res['vol_ratio']:.1f}x` (相较于过去20日平均)
+- **日内宏观定势**: **{res['quant_bias']}**
+- **操作策略**: {res['quant_strategy']}
+- **狙击时间窗口**: {res['timing_window']}
+
+---
+
+## ☯️ 2. 易经时空卦象
 - **本卦**: 上{BAGUA_NAMES[res['upper']]} 下{BAGUA_NAMES[res['lower']]}
 - **动爻**: 第 **{res['moving']}** 爻
 - **状态解读**: *请结合最近的新闻面与此卦象推断市场今日的情绪张力。*
 
-## 📊 核心空间基准
+## 📊 3. 核心空间基准
 - **爆发基准 ATR ({res['multiplier']}x)**: `{res['atr']:.2f} USD` *(代表今日可能爆发的最大空间振幅)*
 - **核心太极中枢 (Pivot)**: `{res['pivot']:.2f} USD`
 > *注：若开盘价在 Pivot 之上，全天具有偏多抵抗性；若在 Pivot 之下，全天具有偏空承压性。*
 
-## 🎯 盘中演化 6 大关键点位
+## 🎯 4. 盘中演化 6 大关键点位
 
 | 爻位层级 | 绝对价格 (USD) | 空间属性 | 交易战术位 |
 | :---: | :---: | :--- | :--- |
